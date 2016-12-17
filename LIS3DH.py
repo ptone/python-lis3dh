@@ -12,8 +12,8 @@
 #  - https://github.com/adafruit/Adafruit_LIS3DH
 #  - https://www.adafruit.com/datasheets/LIS3DH.pdf
 
-from Adafruit_I2C import Adafruit_I2C
-import RPi.GPIO as GPIO        #needed for Hardware interrupt
+import Adafruit_GPIO.I2C as I2C
+import CHIP_IO.GPIO as GPIO
 
 class LIS3DH:
 
@@ -77,7 +77,7 @@ class LIS3DH:
 
    # Values
    DEVICE_ID     = 0x33
-   INT_IO		 = 0x04        # GPIO pin for interrupt
+   INT_IO        = "AP-EINT1"  #	 = 0x04 # GPIO pin for interrupt
    CLK_NONE      = 0x00
    CLK_SINGLE    = 0x01
    CLK_DOUBLE    = 0x02
@@ -87,11 +87,15 @@ class LIS3DH:
    AXIS_Y        = 0x01
    AXIS_Z        = 0x02
 
-   def __init__(self, address=0x18, bus=-1, debug=False):
+   ADC_1        = 0x00
+   ADC_2        = 0x01
+   ADC_3        = 0x02
+
+   def __init__(self, address=0x18, bus=2, debug=False):
       self.isDebug = debug
       self.debug("Initialising LIS3DH")
 
-      self.i2c = Adafruit_I2C(address, busnum=bus)
+      self.i2c = I2C.Device(address, busnum=bus)
       self.address = address
 
       try:
@@ -107,6 +111,9 @@ class LIS3DH:
       self.setAxisStatus(self.AXIS_X, True)
       self.setAxisStatus(self.AXIS_Y, True)
       self.setAxisStatus(self.AXIS_Z, True)
+
+      # Enable ADC
+      self.writeRegister(self.REG_TEMPCFG, 0x80)
 
       # Set 400Hz refresh rate
       self.setDataRate(self.DATARATE_400HZ)
@@ -127,6 +134,18 @@ class LIS3DH:
    # Get reading from Z axis
    def getZ(self):
       return self.getAxis(self.AXIS_Z)
+
+   def getADC(self, channel=None):
+      base = self.REG_OUTADC1_L + (2 * channel) # Determine which register we need to read from (2 per axis)
+      self.i2c.write8(base, 0x80)
+      low = self.i2c.readU8(base) # Read the first register (lower bits)
+      high = self.i2c.readU8(base + 1) # Read the next register (higher bits)
+      res = low | (high << 8) # Combine the two components
+      res = self.twosComp(res) # Calculate the twos compliment of the result
+      #  print res
+      volt = translate(res, 32512, -32512, 900, 1800)
+      return volt
+
 
    # Get a reading from the desired axis
    def getAxis(self, axis):
@@ -180,7 +199,6 @@ class LIS3DH:
        self.writeRegister(self.REG_CTRL1, final)
 	   
    def setInterrupt(self,mycallback):
-        GPIO.setmode(GPIO.BCM)
         GPIO.setup(self.INT_IO, GPIO.IN)
         GPIO.add_event_detect(self.INT_IO, GPIO.RISING, callback=mycallback)
 	
@@ -267,4 +285,13 @@ class LIS3DH:
       if not self.isDebug: return
       print message
 
+def translate(value, leftMin, leftMax, rightMin, rightMax):
+    # Figure out how 'wide' each range is
+    leftSpan = leftMax - leftMin
+    rightSpan = rightMax - rightMin
 
+    # Convert the left range into a 0-1 range (float)
+    valueScaled = float(value - leftMin) / float(leftSpan)
+
+    # Convert the 0-1 range into a value in the right range.
+    return rightMin + (valueScaled * rightSpan)
