@@ -13,7 +13,9 @@
 #  - https://www.adafruit.com/datasheets/LIS3DH.pdf
 
 import Adafruit_GPIO.I2C as I2C
-import CHIP_IO.GPIO as GPIO
+import RPi.GPIO as GPIO
+
+GPIO.setmode(GPIO.BCM)
 
 class LIS3DH:
 
@@ -77,7 +79,7 @@ class LIS3DH:
 
    # Values
    DEVICE_ID     = 0x33
-   INT_IO        = "AP-EINT1"  #	 = 0x04 # GPIO pin for interrupt
+   INT_IO        = 0x04 # GPIO pin for interrupt
    CLK_NONE      = 0x00
    CLK_SINGLE    = 0x01
    CLK_DOUBLE    = 0x02
@@ -91,7 +93,7 @@ class LIS3DH:
    ADC_2        = 0x01
    ADC_3        = 0x02
 
-   def __init__(self, address=0x18, bus=2, debug=False):
+   def __init__(self, address=0x18, bus=1, debug=False):
       self.isDebug = debug
       self.debug("Initialising LIS3DH")
 
